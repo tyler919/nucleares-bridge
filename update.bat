@@ -16,20 +16,47 @@ if %ERRORLEVEL% neq 0 (
     goto :fail
 )
 
-:: Show current version
+:: ----------------------------------------------------------------
+:: If this folder was downloaded manually (no .git folder),
+:: initialise it as a git repo and connect it to GitHub now.
+:: Your .env and variables.yaml are gitignored and will NOT be touched.
+:: ----------------------------------------------------------------
+if not exist .git (
+    echo  [INFO] No git repository found -- setting one up now...
+    echo.
+
+    git init
+    if %ERRORLEVEL% neq 0 goto :fail
+
+    git remote add origin https://github.com/tyler919/nucleares-bridge.git
+    if %ERRORLEVEL% neq 0 goto :fail
+
+    echo  Downloading latest code from GitHub...
+    git fetch origin
+    if %ERRORLEVEL% neq 0 goto :fail
+
+    :: Reset to match remote — gitignored files (.env, variables.yaml) are safe
+    git checkout -b master --track origin/master >nul 2>&1
+    git reset --hard origin/master
+    if %ERRORLEVEL% neq 0 goto :fail
+
+    echo  [OK] Repository initialised successfully.
+    goto :post_pull
+)
+
+:: ----------------------------------------------------------------
+:: Normal update path — repo already exists
+:: ----------------------------------------------------------------
 echo  Current version:
 git log -1 --format="  %%h  %%s  (%%ar)"
 echo.
 
-:: Pull latest code
 echo  Pulling latest code from GitHub...
 git pull
 if %ERRORLEVEL% neq 0 (
     echo.
     echo  [ERROR] git pull failed.
-    echo  If you have edited variables.yaml or other tracked files,
-    echo  those changes are safe -- git will not overwrite your .env
-    echo  or variables.yaml since they are gitignored.
+    echo  Your .env and variables.yaml are gitignored and will not be affected.
     echo.
     echo  If you see a merge conflict on another file, run:
     echo    git stash
@@ -38,6 +65,12 @@ if %ERRORLEVEL% neq 0 (
     goto :fail
 )
 
+echo.
+echo  What changed in this update:
+git log --oneline ORIG_HEAD..HEAD 2>nul || echo  (already up to date)
+
+:post_pull
+
 :: Create variables.yaml from default if the user does not have one yet
 if not exist variables.yaml (
     echo.
@@ -45,11 +78,6 @@ if not exist variables.yaml (
     copy variables.default.yaml variables.yaml >nul
     echo  Created variables.yaml. Edit it to customise which variables are polled.
 )
-
-:: Show what changed
-echo.
-echo  What changed in this update:
-git log --oneline ORIG_HEAD..HEAD 2>nul || echo  (no previous baseline to compare)
 
 :: Restart the Windows service if NSSM is managing it
 echo.
