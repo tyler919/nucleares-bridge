@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Nucleares — Reactor Monitor</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #080c14;
+      --surface:   #0d1525;
+      --border:    #1a2e4a;
+      --text:      #c8d8e8;
+      --muted:     #4a6278;
+      --accent:    #4fc3f7;
+      --green:     #00e676;
+      --yellow:    #ffd740;
+      --red:       #f44336;
+      --card-w:    200px;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+      font-size: 13px;
+      min-height: 100vh;
+    }
+
+    /* ── Header ── */
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 14px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--accent);
+      font-size: 15px;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+    }
+
+    .logo svg { opacity: 0.9; }
+
+    .status-bar {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .pill {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 4px 10px;
+    }
+
+    .dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      transition: background 0.3s, box-shadow 0.3s;
+    }
+    .dot.green  { background: var(--green);  box-shadow: 0 0 6px var(--green); }
+    .dot.red    { background: var(--red);    box-shadow: 0 0 6px var(--red); }
+    .dot.yellow { background: var(--yellow); box-shadow: 0 0 6px var(--yellow); }
+    .dot.grey   { background: var(--muted);  box-shadow: none; }
+
+    /* ── Layout ── */
+    main {
+      padding: 24px;
+      max-width: 1440px;
+      margin: 0 auto;
+    }
+
+    /* ── Alert banner ── */
+    #alert-banner {
+      display: none;
+      background: rgba(244, 67, 54, 0.12);
+      border: 1px solid var(--red);
+      border-radius: 4px;
+      color: var(--red);
+      padding: 10px 16px;
+      margin-bottom: 20px;
+      font-size: 13px;
+      letter-spacing: 1px;
+    }
+
+    /* ── Sections ── */
+    .section { margin-bottom: 28px; }
+
+    .section-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+
+    .section-title {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 3px;
+      color: var(--accent);
+    }
+
+    .section-line {
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(var(--card-w), 1fr));
+      gap: 10px;
+    }
+
+    /* ── Cards ── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 12px 14px;
+      transition: border-color 0.3s;
+    }
+
+    .card.warn  { border-color: var(--yellow); }
+    .card.alert { border-color: var(--red);    }
+
+    .card-label {
+      font-size: 9px;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      color: var(--muted);
+      margin-bottom: 8px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .card-value {
+      font-size: 24px;
+      line-height: 1;
+      color: #e8f4ff;
+      transition: color 0.3s;
+    }
+
+    .card-value.warn  { color: var(--yellow); }
+    .card-value.alert { color: var(--red);    }
+
+    .card-unit {
+      font-size: 11px;
+      color: var(--muted);
+      margin-left: 3px;
+    }
+
+    .card-value.offline {
+      font-size: 14px;
+      color: var(--muted);
+    }
+
+    /* ── Footer ── */
+    footer {
+      text-align: center;
+      color: var(--muted);
+      font-size: 10px;
+      letter-spacing: 1px;
+      padding: 20px;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+      <circle cx="12" cy="12" r="3"/>
+      <path d="M12 2a10 10 0 1 0 0 20A10 10 0 0 0 12 2z" stroke-dasharray="3 3"/>
+      <line x1="12" y1="2" x2="12" y2="6"/>
+      <line x1="12" y1="18" x2="12" y2="22"/>
+      <line x1="2" y1="12" x2="6" y2="12"/>
+      <line x1="18" y1="12" x2="22" y2="12"/>
+    </svg>
+    Nucleares Reactor Monitor
+  </div>
+
+  <div class="status-bar">
+    <div class="pill">
+      <div class="dot grey" id="bridge-dot"></div>
+      <span id="bridge-label">Bridge</span>
+    </div>
+    <div class="pill">
+      <div class="dot grey" id="game-dot"></div>
+      <span id="game-label">Game</span>
+    </div>
+    <span id="updated-label">—</span>
+  </div>
+</header>
+
+<main>
+  <div id="alert-banner" role="alert"></div>
+
+  <div class="section">
+    <div class="section-header">
+      <span class="section-title">Core</span>
+      <div class="section-line"></div>
+    </div>
+    <div class="grid" id="grid-core"></div>
+  </div>
+
+  <div class="section">
+    <div class="section-header">
+      <span class="section-title">Control Rods</span>
+      <div class="section-line"></div>
+    </div>
+    <div class="grid" id="grid-rods"></div>
+  </div>
+
+  <div class="section">
+    <div class="section-header">
+      <span class="section-title">Coolant</span>
+      <div class="section-line"></div>
+    </div>
+    <div class="grid" id="grid-coolant"></div>
+  </div>
+
+  <div class="section">
+    <div class="section-header">
+      <span class="section-title">Generators</span>
+      <div class="section-line"></div>
+    </div>
+    <div class="grid" id="grid-generators"></div>
+  </div>
+
+  <div class="section">
+    <div class="section-header">
+      <span class="section-title">Steam Turbines</span>
+      <div class="section-line"></div>
+    </div>
+    <div class="grid" id="grid-turbines"></div>
+  </div>
+
+  <div class="section">
+    <div class="section-header">
+      <span class="section-title">Circulation Pumps</span>
+      <div class="section-line"></div>
+    </div>
+    <div class="grid" id="grid-pumps"></div>
+  </div>
+</main>
+
+<footer>NUCLEARES BRIDGE &mdash; REACTOR MONITOR &mdash; REFRESHES EVERY 3s</footer>
+
+<script>
+// ---------------------------------------------------------------------------
+// Variable definitions — label, unit, section, optional warn/alert thresholds
+// ---------------------------------------------------------------------------
+const VARS = {
+  // Core
+  CORE_TEMP:                        { label: "Core Temperature",    unit: "°C",  section: "core",       warn: 300, alert: 380 },
+  CORE_TEMP_MAX:                    { label: "Core Temp Max",       unit: "°C",  section: "core" },
+  CORE_PRESSURE:                    { label: "Core Pressure",       unit: "bar", section: "core",       warn: 160, alert: 200 },
+  CORE_INTEGRITY:                   { label: "Core Integrity",      unit: "%",   section: "core" },
+  CORE_WEAR:                        { label: "Core Wear",           unit: "%",   section: "core",       warn: 50, alert: 80 },
+  CORE_STATE:                       { label: "Core State",          unit: "",    section: "core" },
+  CORE_STATE_CRITICALITY:           { label: "Criticality",         unit: "",    section: "core" },
+  CORE_IMMINENT_FUSION:             { label: "Imminent Fusion",     unit: "",    section: "core" },
+  CORE_CRITICAL_MASS_REACHED:       { label: "Critical Mass",       unit: "",    section: "core" },
+  CORE_READY_FOR_START:             { label: "Ready for Start",     unit: "",    section: "core" },
+
+  // Rods
+  RODS_POS_ACTUAL:                  { label: "Position (Actual)",   unit: "%",   section: "rods" },
+  RODS_POS_ORDERED:                 { label: "Position (Ordered)",  unit: "%",   section: "rods" },
+  RODS_TEMPERATURE:                 { label: "Temperature",         unit: "°C",  section: "rods",       warn: 200, alert: 350 },
+  RODS_MAX_TEMPERATURE:             { label: "Max Temperature",     unit: "°C",  section: "rods" },
+  RODS_STATUS:                      { label: "Status",              unit: "",    section: "rods" },
+  RODS_DEFORMED:                    { label: "Deformed",            unit: "",    section: "rods" },
+  RODS_ALIGNED:                     { label: "Aligned",             unit: "",    section: "rods" },
+  RODS_QUANTITY:                    { label: "Quantity",            unit: "",    section: "rods" },
+
+  // Coolant
+  COOLANT_CORE_VESSEL_TEMPERATURE:  { label: "Vessel Temperature",  unit: "°C",  section: "coolant",    warn: 280, alert: 340 },
+  COOLANT_CORE_PRESSURE:            { label: "Pressure",            unit: "bar", section: "coolant" },
+  COOLANT_CORE_MAX_PRESSURE:        { label: "Max Pressure",        unit: "bar", section: "coolant" },
+  COOLANT_CORE_FLOW_SPEED:          { label: "Flow Speed",          unit: "",    section: "coolant" },
+  COOLANT_CORE_PRIMARY_LOOP_LEVEL:  { label: "Loop Level",          unit: "%",   section: "coolant" },
+  COOLANT_CORE_STATE:               { label: "State",               unit: "",    section: "coolant" },
+
+  // Generators
+  GENERATOR_0_KW:                   { label: "Generator 1 Power",   unit: "kW",  section: "generators" },
+  GENERATOR_0_V:                    { label: "Generator 1 Voltage", unit: "V",   section: "generators" },
+  GENERATOR_0_HERTZ:                { label: "Generator 1 Freq",    unit: "Hz",  section: "generators" },
+  GENERATOR_0_BREAKER:              { label: "Generator 1 Breaker", unit: "",    section: "generators" },
+  GENERATOR_1_KW:                   { label: "Generator 2 Power",   unit: "kW",  section: "generators" },
+  GENERATOR_1_V:                    { label: "Generator 2 Voltage", unit: "V",   section: "generators" },
+  GENERATOR_1_HERTZ:                { label: "Generator 2 Freq",    unit: "Hz",  section: "generators" },
+  GENERATOR_1_BREAKER:              { label: "Generator 2 Breaker", unit: "",    section: "generators" },
+  GENERATOR_2_KW:                   { label: "Generator 3 Power",   unit: "kW",  section: "generators" },
+  GENERATOR_2_V:                    { label: "Generator 3 Voltage", unit: "V",   section: "generators" },
+  GENERATOR_2_HERTZ:                { label: "Generator 3 Freq",    unit: "Hz",  section: "generators" },
+  GENERATOR_2_BREAKER:              { label: "Generator 3 Breaker", unit: "",    section: "generators" },
+
+  // Turbines
+  STEAM_TURBINE_0_RPM:              { label: "Turbine 1 RPM",       unit: "RPM", section: "turbines" },
+  STEAM_TURBINE_0_TEMPERATURE:      { label: "Turbine 1 Temp",      unit: "°C",  section: "turbines" },
+  STEAM_TURBINE_0_PRESSURE:         { label: "Turbine 1 Pressure",  unit: "bar", section: "turbines" },
+  STEAM_TURBINE_1_RPM:              { label: "Turbine 2 RPM",       unit: "RPM", section: "turbines" },
+  STEAM_TURBINE_1_TEMPERATURE:      { label: "Turbine 2 Temp",      unit: "°C",  section: "turbines" },
+  STEAM_TURBINE_1_PRESSURE:         { label: "Turbine 2 Pressure",  unit: "bar", section: "turbines" },
+  STEAM_TURBINE_2_RPM:              { label: "Turbine 3 RPM",       unit: "RPM", section: "turbines" },
+  STEAM_TURBINE_2_TEMPERATURE:      { label: "Turbine 3 Temp",      unit: "°C",  section: "turbines" },
+  STEAM_TURBINE_2_PRESSURE:         { label: "Turbine 3 Pressure",  unit: "bar", section: "turbines" },
+
+  // Pumps
+  COOLANT_CORE_CIRCULATION_PUMP_0_STATUS: { label: "Pump 1 Status", unit: "", section: "pumps" },
+  COOLANT_CORE_CIRCULATION_PUMP_0_SPEED:  { label: "Pump 1 Speed",  unit: "%", section: "pumps" },
+  COOLANT_CORE_CIRCULATION_PUMP_1_STATUS: { label: "Pump 2 Status", unit: "", section: "pumps" },
+  COOLANT_CORE_CIRCULATION_PUMP_1_SPEED:  { label: "Pump 2 Speed",  unit: "%", section: "pumps" },
+  COOLANT_CORE_CIRCULATION_PUMP_2_STATUS: { label: "Pump 3 Status", unit: "", section: "pumps" },
+  COOLANT_CORE_CIRCULATION_PUMP_2_SPEED:  { label: "Pump 3 Speed",  unit: "%", section: "pumps" },
+};
+
+const SECTION_GRID = {
+  core:       "grid-core",
+  rods:       "grid-rods",
+  coolant:    "grid-coolant",
+  generators: "grid-generators",
+  turbines:   "grid-turbines",
+  pumps:      "grid-pumps",
+};
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+function severity(value, meta) {
+  if (value === null || value === undefined || !meta.warn) return "";
+  if (meta.alert !== undefined && value >= meta.alert) return "alert";
+  if (value >= meta.warn) return "warn";
+  return "";
+}
+
+function fmt(value, valueStr) {
+  if (value === null || value === undefined) return "—";
+  if (typeof value === "boolean") return value ? "YES" : "NO";
+  if (typeof value === "string") return value;
+  if (Number.isInteger(value)) return value.toString();
+  return value.toFixed(1);
+}
+
+function hasAlerts(sensors) {
+  return Object.entries(VARS).some(([key, meta]) => {
+    const d = sensors[key];
+    return d && severity(d.value, meta) === "alert";
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Render
+// ---------------------------------------------------------------------------
+function render(data) {
+  const sensors      = data.sensors || {};
+  const gameOnline   = data.game_connected;
+
+  // Clear grids
+  Object.values(SECTION_GRID).forEach(id => {
+    document.getElementById(id).innerHTML = "";
+  });
+
+  // Alert banner
+  const banner = document.getElementById("alert-banner");
+  if (gameOnline && hasAlerts(sensors)) {
+    banner.style.display = "block";
+    banner.textContent   = "⚠  CRITICAL ALERT — One or more parameters exceed safe limits";
+  } else {
+    banner.style.display = "none";
+  }
+
+  // Cards
+  for (const [varName, meta] of Object.entries(VARS)) {
+    const grid = document.getElementById(SECTION_GRID[meta.section]);
+    if (!grid) continue;
+
+    const sensorData = sensors[varName];
+    const value      = sensorData ? sensorData.value      : null;
+    const valueStr   = sensorData ? sensorData.value_str  : null;
+    const sev        = gameOnline ? severity(value, meta) : "";
+
+    const card = document.createElement("div");
+    card.className = `card ${sev}`;
+
+    let valueHTML;
+    if (!gameOnline) {
+      valueHTML = `<span class="offline">offline</span>`;
+    } else {
+      const display = fmt(value, valueStr);
+      const unit    = (value !== null && meta.unit) ? `<span class="card-unit">${meta.unit}</span>` : "";
+      valueHTML     = `${display}${unit}`;
+    }
+
+    card.innerHTML = `
+      <div class="card-label">${meta.label}</div>
+      <div class="card-value ${sev} ${!gameOnline ? 'offline' : ''}">${valueHTML}</div>
+    `;
+
+    grid.appendChild(card);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Poll loop
+// ---------------------------------------------------------------------------
+async function refresh() {
+  const bridgeDot   = document.getElementById("bridge-dot");
+  const gameDot     = document.getElementById("game-dot");
+  const bridgeLabel = document.getElementById("bridge-label");
+  const gameLabel   = document.getElementById("game-label");
+  const updated     = document.getElementById("updated-label");
+
+  try {
+    const resp = await fetch("/ui/data");
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const data = await resp.json();
+
+    bridgeDot.className   = "dot green";
+    bridgeLabel.textContent = "Bridge OK";
+
+    if (data.game_connected) {
+      gameDot.className   = "dot green";
+      gameLabel.textContent = "Game Online";
+    } else {
+      gameDot.className   = "dot red";
+      gameLabel.textContent = "Game Offline";
+    }
+
+    updated.textContent = "Updated " + new Date().toLocaleTimeString();
+    render(data);
+
+  } catch (e) {
+    bridgeDot.className    = "dot red";
+    bridgeLabel.textContent  = "Bridge Offline";
+    gameDot.className      = "dot grey";
+    gameLabel.textContent    = "Unknown";
+    updated.textContent    = "Connection lost";
+  }
+}
+
+refresh();
+setInterval(refresh, 3000);
+</script>
+</body>
+</html>

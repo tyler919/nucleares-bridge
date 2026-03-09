@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 
 import yaml
 import requests
-from flask import Flask, jsonify, request, abort
+from flask import Flask, jsonify, request, abort, render_template
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -193,6 +193,31 @@ def control():
     except requests.RequestException as exc:
         log.error("Failed to send control command to game: %s", exc)
         return jsonify({"success": False, "error": str(exc)}), 502
+
+
+# ---------------------------------------------------------------------------
+# UI routes — no API key required, accessible from any browser on the LAN
+# ---------------------------------------------------------------------------
+
+# GET /ui  — serves the dashboard HTML
+@app.route("/ui")
+def ui():
+    return render_template("ui.html")
+
+
+# GET /ui/data  — sensor data for the dashboard JS to fetch
+# Skips API key check so the browser can call it without headers.
+# IP restriction still applies if ALLOWED_IP is set.
+@app.route("/ui/data")
+def ui_data():
+    if ALLOWED_IP and request.remote_addr not in (ALLOWED_IP, "127.0.0.1"):
+        abort(403, description="Forbidden.")
+    with _cache_lock:
+        return jsonify({
+            "game_connected": _game_connected,
+            "last_poll":      _last_poll,
+            "sensors":        dict(_cache),
+        })
 
 
 # ---------------------------------------------------------------------------
