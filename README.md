@@ -53,8 +53,12 @@ Edit `.env`:
 
 ### 3. Edit variables (optional)
 
-`variables.yaml` lists every Nucleares variable the bridge will poll.
-Add or remove entries freely. Variable names must match exactly what
+The bridge ships with `variables.default.yaml` containing all known variables.
+On first run (or when you run `update.bat` / `update.sh` for the first time),
+this is copied to `variables.yaml` — your personal copy that is **never
+overwritten by updates**.
+
+Edit `variables.yaml` freely. Variable names must match exactly what
 the Nucleares API expects.
 
 ### 4. Run (manual)
@@ -154,6 +158,36 @@ Response:
 ```json
 { "success": true, "variable": "RODS_ALL_POS_ORDERED", "value": 0 }
 ```
+
+---
+
+---
+
+## Updating
+
+Run the update script — it pulls the latest code, shows what changed, and
+restarts the service. **Your `.env` and `variables.yaml` are never touched.**
+
+**Windows:**
+```
+update.bat
+```
+Run as Administrator if NSSM needs to restart the service.
+
+**Linux / WSL / macOS:**
+```bash
+./update.sh
+```
+
+### What is safe across updates
+
+| File | Safe? | Why |
+|---|---|---|
+| `.env` | Yes | Gitignored — git never touches it |
+| `variables.yaml` | Yes | Gitignored — your personal copy |
+| `bridge.log` | Yes | Gitignored |
+| `variables.default.yaml` | Overwritten | Shipped defaults — edit `variables.yaml` instead |
+| `bridge.py`, `templates/` | Overwritten | Core code — do not edit these directly |
 
 ---
 

@@ -78,12 +78,15 @@ log = _setup_logging()
 
 # ---------------------------------------------------------------------------
 # Load variable list
+# variables.yaml      — user's local copy (gitignored, never overwritten by updates)
+# variables.default.yaml — shipped defaults, used if no local copy exists
 # ---------------------------------------------------------------------------
-with open("variables.yaml") as f:
+_VAR_FILE = "variables.yaml" if os.path.exists("variables.yaml") else "variables.default.yaml"
+with open(_VAR_FILE) as f:
     _cfg = yaml.safe_load(f)
 
 VARIABLES: list[dict] = _cfg.get("variables", [])
-log.info("Loaded %d variables from variables.yaml", len(VARIABLES))
+log.info("Loaded %d variables from %s", len(VARIABLES), _VAR_FILE)
 
 # ---------------------------------------------------------------------------
 # Thread-safe state

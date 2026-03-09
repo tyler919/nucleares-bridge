@@ -1,4 +1,7 @@
 .env
+variables.yaml
+bridge.log
+bridge.log.*
 __pycache__/
 *.pyc
 *.pyo
