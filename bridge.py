@@ -120,17 +120,45 @@ def _poll_loop() -> None:
                     params={"Variable": name},
                     timeout=3,
                 )
-                r.raise_for_status()
-                data = r.json()
 
-                if data.get("errors") is None:
-                    results[name] = {
-                        "value":     data.get("value"),
-                        "value_str": data.get("value_str"),
-                    }
-                else:
+                # 404 = variable doesn't exist in this game version — skip silently
+                if r.status_code == 404:
+                    log.debug("Variable %s not found (404) — skipping", name)
                     results[name] = {"value": None, "value_str": None}
-                    failed.append(name)
+                    continue
+
+                r.raise_for_status()
+
+                # Empty body = variable has no value right now
+                text = r.text.strip()
+                if not text:
+                    results[name] = {"value": None, "value_str": None}
+                    continue
+
+                # Parse response — the game API returns either:
+                #   a) A raw value directly: 312.4 / 1 / "ACTIVE"
+                #   b) A JSON object: {"value": ..., "value_str": ..., "errors": null}
+                try:
+                    data = r.json()
+                except ValueError:
+                    results[name] = {"value": None, "value_str": None}
+                    continue
+
+                if isinstance(data, dict):
+                    if data.get("errors") is None:
+                        results[name] = {
+                            "value":     data.get("value"),
+                            "value_str": data.get("value_str"),
+                        }
+                    else:
+                        results[name] = {"value": None, "value_str": None}
+                        failed.append(name)
+                else:
+                    # Raw value — wrap it consistently
+                    results[name] = {
+                        "value":     data,
+                        "value_str": str(data),
+                    }
 
             except requests.ConnectionError:
                 results[name] = {"value": None, "value_str": None}

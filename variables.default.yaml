@@ -84,17 +84,14 @@ variables:
   - name: STEAM_TURBINE_0_RPM
   - name: STEAM_TURBINE_0_TEMPERATURE
   - name: STEAM_TURBINE_0_PRESSURE
-  - name: STEAM_TURBINE_0_BYPASS_ORDERED
 
   - name: STEAM_TURBINE_1_RPM
   - name: STEAM_TURBINE_1_TEMPERATURE
   - name: STEAM_TURBINE_1_PRESSURE
-  - name: STEAM_TURBINE_1_BYPASS_ORDERED
 
   - name: STEAM_TURBINE_2_RPM
   - name: STEAM_TURBINE_2_TEMPERATURE
   - name: STEAM_TURBINE_2_PRESSURE
-  - name: STEAM_TURBINE_2_BYPASS_ORDERED
 
   # -------------------------------------------------------------------------
   # Generators (3 units: 0, 1, 2)
