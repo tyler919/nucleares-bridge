@@ -1,0 +1,124 @@
+# Nucleares variables to poll.
+# Add or remove entries as needed.
+# "name" must exactly match the variable name the game API expects.
+#
+# NOTE: Generator and turbine variable names are based on observed community
+# usage. If a variable returns null, verify the exact name against the
+# official Nucleares webserver documentation or the in-game tablet API list.
+
+variables:
+
+  # -------------------------------------------------------------------------
+  # Core
+  # -------------------------------------------------------------------------
+  - name: CORE_TEMP
+  - name: CORE_TEMP_MAX
+  - name: CORE_TEMP_MIN
+  - name: CORE_TEMP_OPERATIVE
+  - name: CORE_TEMP_RESIDUAL
+  - name: CORE_PRESSURE
+  - name: CORE_PRESSURE_MAX
+  - name: CORE_PRESSURE_OPERATIVE
+  - name: CORE_INTEGRITY
+  - name: CORE_WEAR
+  - name: CORE_STATE
+  - name: CORE_STATE_CRITICALITY
+  - name: CORE_CRITICAL_MASS_REACHED
+  - name: CORE_CRITICAL_MASS_REACHED_COUNTER
+  - name: CORE_IMMINENT_FUSION
+  - name: CORE_READY_FOR_START
+  - name: CORE_STEAM_PRESENT
+  - name: CORE_HIGH_STEAM_PRESENT
+
+  # -------------------------------------------------------------------------
+  # Control Rods
+  # -------------------------------------------------------------------------
+  - name: RODS_STATUS
+  - name: RODS_POS_ACTUAL
+  - name: RODS_POS_ORDERED
+  - name: RODS_POS_REACHED
+  - name: RODS_TEMPERATURE
+  - name: RODS_MAX_TEMPERATURE
+  - name: RODS_MOVEMENT_SPEED
+  - name: RODS_DEFORMED
+  - name: RODS_QUANTITY
+  - name: RODS_ALIGNED
+
+  # -------------------------------------------------------------------------
+  # Coolant — Core
+  # -------------------------------------------------------------------------
+  - name: COOLANT_CORE_STATE
+  - name: COOLANT_CORE_PRESSURE
+  - name: COOLANT_CORE_MAX_PRESSURE
+  - name: COOLANT_CORE_VESSEL_TEMPERATURE
+  - name: COOLANT_CORE_QUANTITY_IN_VESSEL
+  - name: COOLANT_CORE_PRIMARY_LOOP_LEVEL
+  - name: COOLANT_CORE_FLOW_SPEED
+  - name: COOLANT_CORE_FLOW_ORDERED_SPEED
+  - name: COOLANT_CORE_FLOW_REACHED_SPEED
+
+  # -------------------------------------------------------------------------
+  # Coolant — Circulation Pumps (3 units: 0, 1, 2)
+  # -------------------------------------------------------------------------
+  - name: COOLANT_CORE_CIRCULATION_PUMP_0_STATUS
+  - name: COOLANT_CORE_CIRCULATION_PUMP_0_DRY_STATUS
+  - name: COOLANT_CORE_CIRCULATION_PUMP_0_OVERLOAD_STATUS
+  - name: COOLANT_CORE_CIRCULATION_PUMP_0_SPEED
+  - name: COOLANT_CORE_CIRCULATION_PUMP_0_ORDERED_SPEED
+
+  - name: COOLANT_CORE_CIRCULATION_PUMP_1_STATUS
+  - name: COOLANT_CORE_CIRCULATION_PUMP_1_DRY_STATUS
+  - name: COOLANT_CORE_CIRCULATION_PUMP_1_OVERLOAD_STATUS
+  - name: COOLANT_CORE_CIRCULATION_PUMP_1_SPEED
+  - name: COOLANT_CORE_CIRCULATION_PUMP_1_ORDERED_SPEED
+
+  - name: COOLANT_CORE_CIRCULATION_PUMP_2_STATUS
+  - name: COOLANT_CORE_CIRCULATION_PUMP_2_DRY_STATUS
+  - name: COOLANT_CORE_CIRCULATION_PUMP_2_OVERLOAD_STATUS
+  - name: COOLANT_CORE_CIRCULATION_PUMP_2_SPEED
+  - name: COOLANT_CORE_CIRCULATION_PUMP_2_ORDERED_SPEED
+
+  # -------------------------------------------------------------------------
+  # Steam Turbines (3 units: 0, 1, 2)
+  # -------------------------------------------------------------------------
+  - name: STEAM_TURBINE_0_RPM
+  - name: STEAM_TURBINE_0_TEMPERATURE
+  - name: STEAM_TURBINE_0_PRESSURE
+  - name: STEAM_TURBINE_0_BYPASS_ORDERED
+
+  - name: STEAM_TURBINE_1_RPM
+  - name: STEAM_TURBINE_1_TEMPERATURE
+  - name: STEAM_TURBINE_1_PRESSURE
+  - name: STEAM_TURBINE_1_BYPASS_ORDERED
+
+  - name: STEAM_TURBINE_2_RPM
+  - name: STEAM_TURBINE_2_TEMPERATURE
+  - name: STEAM_TURBINE_2_PRESSURE
+  - name: STEAM_TURBINE_2_BYPASS_ORDERED
+
+  # -------------------------------------------------------------------------
+  # Generators (3 units: 0, 1, 2)
+  # -------------------------------------------------------------------------
+  - name: GENERATOR_0_KW
+  - name: GENERATOR_0_V
+  - name: GENERATOR_0_A
+  - name: GENERATOR_0_HERTZ
+  - name: GENERATOR_0_BREAKER
+
+  - name: GENERATOR_1_KW
+  - name: GENERATOR_1_V
+  - name: GENERATOR_1_A
+  - name: GENERATOR_1_HERTZ
+  - name: GENERATOR_1_BREAKER
+
+  - name: GENERATOR_2_KW
+  - name: GENERATOR_2_V
+  - name: GENERATOR_2_A
+  - name: GENERATOR_2_HERTZ
+  - name: GENERATOR_2_BREAKER
+
+  # -------------------------------------------------------------------------
+  # Time
+  # -------------------------------------------------------------------------
+  - name: TIME
+  - name: TIME_STAMP
