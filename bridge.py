@@ -206,6 +206,9 @@ def _poll_loop() -> None:
 # ---------------------------------------------------------------------------
 # Auth middleware
 # ---------------------------------------------------------------------------
+_LOOPBACK = {"127.0.0.1", "::1"}
+
+
 def _check_auth() -> None:
     """Abort request if API key or source IP is wrong."""
     if API_KEY:
@@ -218,10 +221,11 @@ def _check_auth() -> None:
             abort(401, description="Invalid API key.")
 
     if ALLOWED_IP:
-        if request.remote_addr != ALLOWED_IP:
+        allowed = {ALLOWED_IP} | _LOOPBACK
+        if request.remote_addr not in allowed:
             log.warning(
-                "Rejected %s %s from %s — IP not in allowlist",
-                request.method, request.path, request.remote_addr,
+                "Rejected %s %s from %s — IP not in allowlist (allowed: %s)",
+                request.method, request.path, request.remote_addr, ALLOWED_IP,
             )
             abort(403, description="Forbidden.")
 
@@ -341,8 +345,8 @@ def ui():
 
 @app.route("/ui/data")
 def ui_data():
-    if ALLOWED_IP and request.remote_addr not in (ALLOWED_IP, "127.0.0.1"):
-        abort(403, description="Forbidden.")
+    # UI routes are open to any browser on the LAN — no API key or IP restriction.
+    # They only expose game telemetry, not controls or credentials.
     with _cache_lock:
         return jsonify({
             "game_connected": _game_connected,
@@ -355,8 +359,6 @@ def ui_data():
 
 @app.route("/ui/logs")
 def ui_logs():
-    if ALLOWED_IP and request.remote_addr not in (ALLOWED_IP, "127.0.0.1"):
-        abort(403, description="Forbidden.")
     level  = request.args.get("level", "").upper()
     limit  = min(int(request.args.get("limit", 200)), 500)
     entries = list(_LOG_BUFFER)
