@@ -4,10 +4,12 @@ Polls the Nucleares game webserver (localhost:8080) and exposes the data
 over a local REST API so Home Assistant can pull from it.
 """
 
+import collections
 import os
 import time
 import threading
 import logging
+import logging.handlers
 from datetime import datetime, timezone
 
 import yaml
@@ -21,16 +23,58 @@ load_dotenv()
 # Config
 # ---------------------------------------------------------------------------
 API_KEY        = os.getenv("HA_API_KEY", "")
-ALLOWED_IP     = os.getenv("ALLOWED_IP", "")        # empty = any LAN IP allowed
+ALLOWED_IP     = os.getenv("ALLOWED_IP", "")
 BRIDGE_PORT    = int(os.getenv("BRIDGE_PORT", 8765))
 POLL_INTERVAL  = int(os.getenv("POLL_INTERVAL", 5))
 NUCLEARES_URL  = os.getenv("NUCLEARES_URL", "http://localhost:8080/")
+LOG_FILE       = os.getenv("LOG_FILE", "bridge.log")
+LOG_LEVEL      = os.getenv("LOG_LEVEL", "INFO").upper()
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s",
-)
-log = logging.getLogger(__name__)
+# ---------------------------------------------------------------------------
+# Logging — console + rotating file + in-memory ring buffer for /logs
+# ---------------------------------------------------------------------------
+_LOG_BUFFER: collections.deque = collections.deque(maxlen=500)
+_LOG_FMT = "%(asctime)s [%(levelname)s] %(message)s"
+_LOG_DATE = "%H:%M:%S"
+
+
+class _BufferHandler(logging.Handler):
+    """Captures log records into the in-memory ring buffer for the UI."""
+    def emit(self, record: logging.LogRecord) -> None:
+        _LOG_BUFFER.append({
+            "time":    datetime.fromtimestamp(record.created).strftime("%Y-%m-%d %H:%M:%S"),
+            "level":   record.levelname,
+            "message": record.getMessage(),
+        })
+
+
+def _setup_logging() -> logging.Logger:
+    logger = logging.getLogger("nucleares")
+    logger.setLevel(getattr(logging, LOG_LEVEL, logging.INFO))
+
+    fmt = logging.Formatter(_LOG_FMT, datefmt=_LOG_DATE)
+
+    # Console
+    ch = logging.StreamHandler()
+    ch.setFormatter(fmt)
+    logger.addHandler(ch)
+
+    # Rotating file (5 MB × 3 backups)
+    fh = logging.handlers.RotatingFileHandler(
+        LOG_FILE, maxBytes=5 * 1024 * 1024, backupCount=3, encoding="utf-8"
+    )
+    fh.setFormatter(fmt)
+    logger.addHandler(fh)
+
+    # In-memory buffer (no formatter needed — we build the dict manually)
+    bh = _BufferHandler()
+    bh.setLevel(logging.DEBUG)
+    logger.addHandler(bh)
+
+    return logger
+
+
+log = _setup_logging()
 
 # ---------------------------------------------------------------------------
 # Load variable list
@@ -39,27 +83,31 @@ with open("variables.yaml") as f:
     _cfg = yaml.safe_load(f)
 
 VARIABLES: list[dict] = _cfg.get("variables", [])
+log.info("Loaded %d variables from variables.yaml", len(VARIABLES))
 
 # ---------------------------------------------------------------------------
-# Thread-safe cache
+# Thread-safe state
 # ---------------------------------------------------------------------------
-_cache_lock    = threading.Lock()
-_cache: dict   = {}
-_game_connected = False
+_cache_lock      = threading.Lock()
+_cache: dict     = {}
+_game_connected  = False
 _last_poll: str | None = None
+_poll_count      = 0          # total successful poll cycles
+_error_count     = 0          # total failed poll cycles since start
+_prev_connected  = None       # track state changes for log messages
 
 
 # ---------------------------------------------------------------------------
 # Poller thread
 # ---------------------------------------------------------------------------
 def _poll_loop() -> None:
-    global _game_connected, _last_poll
+    global _game_connected, _last_poll, _poll_count, _error_count, _prev_connected
 
-    log.info("Poller started — interval %ds", POLL_INTERVAL)
+    log.info("Poller started — interval %ds, target %s", POLL_INTERVAL, NUCLEARES_URL)
 
     while True:
         results: dict = {}
-        all_ok = True
+        failed: list  = []
 
         for var in VARIABLES:
             name = var["name"]
@@ -79,20 +127,47 @@ def _poll_loop() -> None:
                     }
                 else:
                     results[name] = {"value": None, "value_str": None}
-                    all_ok = False
+                    failed.append(name)
 
-            except Exception as exc:
-                log.debug("Poll failed for %s: %s", name, exc)
+            except requests.ConnectionError:
                 results[name] = {"value": None, "value_str": None}
-                all_ok = False
+                failed.append(name)
+            except requests.Timeout:
+                log.warning("Timeout polling %s", name)
+                results[name] = {"value": None, "value_str": None}
+                failed.append(name)
+            except Exception as exc:
+                log.warning("Unexpected error polling %s: %s", name, exc)
+                results[name] = {"value": None, "value_str": None}
+                failed.append(name)
+
+        all_ok = len(failed) == 0
 
         with _cache_lock:
             _cache.update(results)
             _game_connected = all_ok
             _last_poll = datetime.now(timezone.utc).isoformat()
 
-        if not all_ok:
-            log.warning("Game unreachable or some variables failed — retrying in %ds", POLL_INTERVAL)
+            if all_ok:
+                _poll_count += 1
+            else:
+                _error_count += 1
+
+        # Log connection state changes
+        if _prev_connected is None or _prev_connected != all_ok:
+            if all_ok:
+                log.info(
+                    "Game connection established — polling %d variables",
+                    len(VARIABLES),
+                )
+            else:
+                log.warning(
+                    "Game connection lost — %d/%d variables failed (e.g. %s)",
+                    len(failed),
+                    len(VARIABLES),
+                    failed[0] if failed else "?",
+                )
+            _prev_connected = all_ok
 
         time.sleep(POLL_INTERVAL)
 
@@ -105,12 +180,18 @@ def _check_auth() -> None:
     if API_KEY:
         provided = request.headers.get("X-API-Key", "")
         if provided != API_KEY:
-            log.warning("Rejected request from %s — bad API key", request.remote_addr)
+            log.warning(
+                "Rejected %s %s from %s — bad API key",
+                request.method, request.path, request.remote_addr,
+            )
             abort(401, description="Invalid API key.")
 
     if ALLOWED_IP:
         if request.remote_addr != ALLOWED_IP:
-            log.warning("Rejected request from %s — IP not allowed", request.remote_addr)
+            log.warning(
+                "Rejected %s %s from %s — IP not in allowlist",
+                request.method, request.path, request.remote_addr,
+            )
             abort(403, description="Forbidden.")
 
 
@@ -138,6 +219,9 @@ def health():
             "status":         "ok",
             "game_connected": _game_connected,
             "last_poll":      _last_poll,
+            "poll_count":     _poll_count,
+            "error_count":    _error_count,
+            "variable_count": len(VARIABLES),
         })
 
 
@@ -145,6 +229,7 @@ def health():
 @app.route("/sensors")
 def sensors():
     _check_auth()
+    log.debug("GET /sensors from %s", request.remote_addr)
     with _cache_lock:
         return jsonify({
             "game_connected": _game_connected,
@@ -161,10 +246,7 @@ def sensor_single(variable: str):
     with _cache_lock:
         if key not in _cache:
             abort(404, description=f"Variable '{key}' not in poll list.")
-        return jsonify({
-            "variable":  key,
-            **_cache[key],
-        })
+        return jsonify({"variable": key, **_cache[key]})
 
 
 # POST /control  — send a command to the game
@@ -179,7 +261,10 @@ def control():
     variable = str(body["variable"]).upper()
     value    = body["value"]
 
-    log.info("Control command: %s = %s", variable, value)
+    log.info(
+        "Control command from %s: %s = %s",
+        request.remote_addr, variable, value,
+    )
 
     try:
         r = requests.post(
@@ -188,26 +273,41 @@ def control():
             timeout=3,
         )
         r.raise_for_status()
+        log.info("Control command accepted by game: %s = %s", variable, value)
         return jsonify({"success": True, "variable": variable, "value": value})
 
     except requests.RequestException as exc:
-        log.error("Failed to send control command to game: %s", exc)
+        log.error("Control command failed — game rejected it: %s", exc)
         return jsonify({"success": False, "error": str(exc)}), 502
+
+
+# GET /logs  — recent log entries (requires API key)
+@app.route("/logs")
+def logs():
+    _check_auth()
+    level  = request.args.get("level", "").upper()
+    limit  = min(int(request.args.get("limit", 200)), 500)
+
+    entries = list(_LOG_BUFFER)
+
+    if level:
+        entries = [e for e in entries if e["level"] == level]
+
+    return jsonify({
+        "total":   len(_LOG_BUFFER),
+        "entries": entries[-limit:],
+    })
 
 
 # ---------------------------------------------------------------------------
 # UI routes — no API key required, accessible from any browser on the LAN
 # ---------------------------------------------------------------------------
 
-# GET /ui  — serves the dashboard HTML
 @app.route("/ui")
 def ui():
     return render_template("ui.html")
 
 
-# GET /ui/data  — sensor data for the dashboard JS to fetch
-# Skips API key check so the browser can call it without headers.
-# IP restriction still applies if ALLOWED_IP is set.
 @app.route("/ui/data")
 def ui_data():
     if ALLOWED_IP and request.remote_addr not in (ALLOWED_IP, "127.0.0.1"):
@@ -216,17 +316,36 @@ def ui_data():
         return jsonify({
             "game_connected": _game_connected,
             "last_poll":      _last_poll,
+            "poll_count":     _poll_count,
+            "error_count":    _error_count,
             "sensors":        dict(_cache),
         })
+
+
+@app.route("/ui/logs")
+def ui_logs():
+    if ALLOWED_IP and request.remote_addr not in (ALLOWED_IP, "127.0.0.1"):
+        abort(403, description="Forbidden.")
+    level  = request.args.get("level", "").upper()
+    limit  = min(int(request.args.get("limit", 200)), 500)
+    entries = list(_LOG_BUFFER)
+    if level:
+        entries = [e for e in entries if e["level"] == level]
+    return jsonify({
+        "total":   len(_LOG_BUFFER),
+        "entries": entries[-limit:],
+    })
 
 
 # ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
 if __name__ == "__main__":
-    # Start background poller
     t = threading.Thread(target=_poll_loop, daemon=True, name="nucleares-poller")
     t.start()
 
-    log.info("Bridge listening on 0.0.0.0:%d", BRIDGE_PORT)
+    log.info(
+        "Bridge listening on 0.0.0.0:%d — UI at http://localhost:%d/ui",
+        BRIDGE_PORT, BRIDGE_PORT,
+    )
     app.run(host="0.0.0.0", port=BRIDGE_PORT)

@@ -5,6 +5,103 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Nucleares — Reactor Monitor</title>
   <style>
+    /* ── Tabs ── */
+    .tabs {
+      display: flex;
+      gap: 2px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 0 24px;
+    }
+    .tab-btn {
+      background: none;
+      border: none;
+      border-bottom: 2px solid transparent;
+      color: var(--muted);
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 11px;
+      letter-spacing: 2px;
+      padding: 10px 16px;
+      text-transform: uppercase;
+      transition: color 0.2s, border-color 0.2s;
+    }
+    .tab-btn:hover  { color: var(--text); }
+    .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    /* ── Logs panel ── */
+    .log-toolbar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 24px;
+      border-bottom: 1px solid var(--border);
+      flex-wrap: wrap;
+    }
+    .log-toolbar label { color: var(--muted); font-size: 11px; letter-spacing: 1px; }
+    .log-toolbar select, .log-toolbar input {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--text);
+      font-family: inherit;
+      font-size: 12px;
+      padding: 4px 8px;
+    }
+    .log-toolbar button {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--muted);
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 11px;
+      letter-spacing: 1px;
+      padding: 4px 12px;
+      text-transform: uppercase;
+    }
+    .log-toolbar button:hover { color: var(--text); border-color: var(--accent); }
+    .log-toolbar .spacer { flex: 1; }
+    .log-stats { color: var(--muted); font-size: 10px; }
+
+    #log-list {
+      font-size: 12px;
+      list-style: none;
+      margin: 0;
+      padding: 8px 24px 24px;
+      overflow-y: auto;
+      max-height: calc(100vh - 200px);
+    }
+    #log-list li {
+      display: grid;
+      grid-template-columns: 160px 70px 1fr;
+      gap: 12px;
+      padding: 4px 0;
+      border-bottom: 1px solid rgba(26, 46, 74, 0.4);
+      align-items: start;
+    }
+    #log-list li:last-child { border-bottom: none; }
+
+    .log-time { color: var(--muted); white-space: nowrap; }
+    .log-level {
+      font-size: 10px;
+      font-weight: bold;
+      letter-spacing: 1px;
+      padding: 1px 6px;
+      border-radius: 3px;
+      text-align: center;
+      align-self: start;
+    }
+    .log-level.DEBUG    { background: rgba(74,98,120,0.3); color: var(--muted); }
+    .log-level.INFO     { background: rgba(0,230,118,0.15); color: var(--green); }
+    .log-level.WARNING  { background: rgba(255,215,64,0.15); color: var(--yellow); }
+    .log-level.ERROR    { background: rgba(244,67,54,0.15); color: var(--red); }
+    .log-level.CRITICAL { background: var(--red); color: #fff; }
+    .log-msg { color: var(--text); word-break: break-all; }
+  </style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
@@ -214,6 +311,37 @@
   </div>
 </header>
 
+<div class="tabs">
+  <button class="tab-btn active" onclick="switchTab('monitor', this)">Monitor</button>
+  <button class="tab-btn"        onclick="switchTab('logs',    this)">Logs</button>
+</div>
+
+<!-- ── Logs panel ── -->
+<div id="tab-logs" class="tab-panel">
+  <div class="log-toolbar">
+    <label for="log-level-filter">LEVEL</label>
+    <select id="log-level-filter" onchange="refreshLogs()">
+      <option value="">All</option>
+      <option value="DEBUG">DEBUG</option>
+      <option value="INFO">INFO</option>
+      <option value="WARNING">WARNING</option>
+      <option value="ERROR">ERROR</option>
+    </select>
+    <label for="log-limit">SHOW</label>
+    <select id="log-limit" onchange="refreshLogs()">
+      <option value="50">50</option>
+      <option value="100" selected>100</option>
+      <option value="200">200</option>
+      <option value="500">500</option>
+    </select>
+    <button onclick="refreshLogs()">Refresh</button>
+    <div class="spacer"></div>
+    <span class="log-stats" id="log-stats"></span>
+  </div>
+  <ul id="log-list"></ul>
+</div>
+
+<div id="tab-monitor" class="tab-panel active">
 <main>
   <div id="alert-banner" role="alert"></div>
 
@@ -265,6 +393,9 @@
     <div class="grid" id="grid-pumps"></div>
   </div>
 </main>
+
+</main>
+</div><!-- /tab-monitor -->
 
 <footer>NUCLEARES BRIDGE &mdash; REACTOR MONITOR &mdash; REFRESHES EVERY 3s</footer>
 
@@ -461,6 +592,72 @@ async function refresh() {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Tab switching
+// ---------------------------------------------------------------------------
+let _activeTab = "monitor";
+let _logsInterval = null;
+
+function switchTab(name, btn) {
+  document.querySelectorAll(".tab-panel").forEach(p => p.classList.remove("active"));
+  document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+  document.getElementById("tab-" + name).classList.add("active");
+  btn.classList.add("active");
+  _activeTab = name;
+
+  if (name === "logs") {
+    refreshLogs();
+    if (!_logsInterval) _logsInterval = setInterval(refreshLogs, 3000);
+  } else {
+    if (_logsInterval) { clearInterval(_logsInterval); _logsInterval = null; }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Logs
+// ---------------------------------------------------------------------------
+const LEVEL_ORDER = ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"];
+
+async function refreshLogs() {
+  const level = document.getElementById("log-level-filter").value;
+  const limit = document.getElementById("log-limit").value;
+  const params = new URLSearchParams({ limit });
+  if (level) params.set("level", level);
+
+  try {
+    const resp = await fetch("/ui/logs?" + params.toString());
+    if (!resp.ok) throw new Error("HTTP " + resp.status);
+    const data = await resp.json();
+
+    document.getElementById("log-stats").textContent =
+      `Showing ${data.entries.length} of ${data.total} buffered entries`;
+
+    const list = document.getElementById("log-list");
+    list.innerHTML = "";
+
+    // Newest first
+    const entries = [...data.entries].reverse();
+    for (const entry of entries) {
+      const li = document.createElement("li");
+      li.innerHTML = `
+        <span class="log-time">${entry.time}</span>
+        <span class="log-level ${entry.level}">${entry.level}</span>
+        <span class="log-msg">${escapeHtml(entry.message)}</span>
+      `;
+      list.appendChild(li);
+    }
+  } catch (e) {
+    document.getElementById("log-stats").textContent = "Failed to load logs";
+  }
+}
+
+function escapeHtml(str) {
+  return str.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+}
+
+// ---------------------------------------------------------------------------
+// Start monitor tab polling
+// ---------------------------------------------------------------------------
 refresh();
 setInterval(refresh, 3000);
 </script>
