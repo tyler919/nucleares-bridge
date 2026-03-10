@@ -5,103 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Nucleares — Reactor Monitor</title>
   <style>
-    /* ── Tabs ── */
-    .tabs {
-      display: flex;
-      gap: 2px;
-      background: var(--surface);
-      border-bottom: 1px solid var(--border);
-      padding: 0 24px;
-    }
-    .tab-btn {
-      background: none;
-      border: none;
-      border-bottom: 2px solid transparent;
-      color: var(--muted);
-      cursor: pointer;
-      font-family: inherit;
-      font-size: 11px;
-      letter-spacing: 2px;
-      padding: 10px 16px;
-      text-transform: uppercase;
-      transition: color 0.2s, border-color 0.2s;
-    }
-    .tab-btn:hover  { color: var(--text); }
-    .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
-
-    .tab-panel { display: none; }
-    .tab-panel.active { display: block; }
-
-    /* ── Logs panel ── */
-    .log-toolbar {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      padding: 14px 24px;
-      border-bottom: 1px solid var(--border);
-      flex-wrap: wrap;
-    }
-    .log-toolbar label { color: var(--muted); font-size: 11px; letter-spacing: 1px; }
-    .log-toolbar select, .log-toolbar input {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 4px;
-      color: var(--text);
-      font-family: inherit;
-      font-size: 12px;
-      padding: 4px 8px;
-    }
-    .log-toolbar button {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 4px;
-      color: var(--muted);
-      cursor: pointer;
-      font-family: inherit;
-      font-size: 11px;
-      letter-spacing: 1px;
-      padding: 4px 12px;
-      text-transform: uppercase;
-    }
-    .log-toolbar button:hover { color: var(--text); border-color: var(--accent); }
-    .log-toolbar .spacer { flex: 1; }
-    .log-stats { color: var(--muted); font-size: 10px; }
-
-    #log-list {
-      font-size: 12px;
-      list-style: none;
-      margin: 0;
-      padding: 8px 24px 24px;
-      overflow-y: auto;
-      max-height: calc(100vh - 200px);
-    }
-    #log-list li {
-      display: grid;
-      grid-template-columns: 160px 70px 1fr;
-      gap: 12px;
-      padding: 4px 0;
-      border-bottom: 1px solid rgba(26, 46, 74, 0.4);
-      align-items: start;
-    }
-    #log-list li:last-child { border-bottom: none; }
-
-    .log-time { color: var(--muted); white-space: nowrap; }
-    .log-level {
-      font-size: 10px;
-      font-weight: bold;
-      letter-spacing: 1px;
-      padding: 1px 6px;
-      border-radius: 3px;
-      text-align: center;
-      align-self: start;
-    }
-    .log-level.DEBUG    { background: rgba(74,98,120,0.3); color: var(--muted); }
-    .log-level.INFO     { background: rgba(0,230,118,0.15); color: var(--green); }
-    .log-level.WARNING  { background: rgba(255,215,64,0.15); color: var(--yellow); }
-    .log-level.ERROR    { background: rgba(244,67,54,0.15); color: var(--red); }
-    .log-level.CRITICAL { background: var(--red); color: #fff; }
-    .log-msg { color: var(--text); word-break: break-all; }
-  </style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
@@ -179,6 +82,33 @@
     .dot.red    { background: var(--red);    box-shadow: 0 0 6px var(--red); }
     .dot.yellow { background: var(--yellow); box-shadow: 0 0 6px var(--yellow); }
     .dot.grey   { background: var(--muted);  box-shadow: none; }
+
+    /* ── Tabs ── */
+    .tabs {
+      display: flex;
+      gap: 2px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 0 24px;
+    }
+    .tab-btn {
+      background: none;
+      border: none;
+      border-bottom: 2px solid transparent;
+      color: var(--muted);
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 11px;
+      letter-spacing: 2px;
+      padding: 10px 16px;
+      text-transform: uppercase;
+      transition: color 0.2s, border-color 0.2s;
+    }
+    .tab-btn:hover  { color: var(--text); }
+    .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
 
     /* ── Layout ── */
     main {
@@ -273,6 +203,76 @@
       color: var(--muted);
     }
 
+    /* ── Logs panel ── */
+    .log-toolbar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 24px;
+      border-bottom: 1px solid var(--border);
+      flex-wrap: wrap;
+    }
+    .log-toolbar label { color: var(--muted); font-size: 11px; letter-spacing: 1px; }
+    .log-toolbar select {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--text);
+      font-family: inherit;
+      font-size: 12px;
+      padding: 4px 8px;
+    }
+    .log-toolbar button {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--muted);
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 11px;
+      letter-spacing: 1px;
+      padding: 4px 12px;
+      text-transform: uppercase;
+    }
+    .log-toolbar button:hover { color: var(--text); border-color: var(--accent); }
+    .log-toolbar .spacer { flex: 1; }
+    .log-stats { color: var(--muted); font-size: 10px; }
+
+    #log-list {
+      font-size: 12px;
+      list-style: none;
+      margin: 0;
+      padding: 8px 24px 24px;
+      overflow-y: auto;
+      max-height: calc(100vh - 200px);
+    }
+    #log-list li {
+      display: grid;
+      grid-template-columns: 160px 70px 1fr;
+      gap: 12px;
+      padding: 4px 0;
+      border-bottom: 1px solid rgba(26, 46, 74, 0.4);
+      align-items: start;
+    }
+    #log-list li:last-child { border-bottom: none; }
+
+    .log-time { color: var(--muted); white-space: nowrap; }
+    .log-level {
+      font-size: 10px;
+      font-weight: bold;
+      letter-spacing: 1px;
+      padding: 1px 6px;
+      border-radius: 3px;
+      text-align: center;
+      align-self: start;
+    }
+    .log-level.DEBUG    { background: rgba(74,98,120,0.3);   color: var(--muted);  }
+    .log-level.INFO     { background: rgba(0,230,118,0.15);  color: var(--green);  }
+    .log-level.WARNING  { background: rgba(255,215,64,0.15); color: var(--yellow); }
+    .log-level.ERROR    { background: rgba(244,67,54,0.15);  color: var(--red);    }
+    .log-level.CRITICAL { background: var(--red); color: #fff; }
+    .log-msg { color: var(--text); word-break: break-all; }
+
     /* ── Footer ── */
     footer {
       text-align: center;
@@ -316,7 +316,7 @@
   <button class="tab-btn"        onclick="switchTab('logs',    this)">Logs</button>
 </div>
 
-<!-- ── Logs panel ── -->
+<!-- ── Logs tab ── -->
 <div id="tab-logs" class="tab-panel">
   <div class="log-toolbar">
     <label for="log-level-filter">LEVEL</label>
@@ -341,61 +341,60 @@
   <ul id="log-list"></ul>
 </div>
 
+<!-- ── Monitor tab ── -->
 <div id="tab-monitor" class="tab-panel active">
-<main>
-  <div id="alert-banner" role="alert"></div>
+  <main>
+    <div id="alert-banner" role="alert"></div>
 
-  <div class="section">
-    <div class="section-header">
-      <span class="section-title">Core</span>
-      <div class="section-line"></div>
+    <div class="section">
+      <div class="section-header">
+        <span class="section-title">Core</span>
+        <div class="section-line"></div>
+      </div>
+      <div class="grid" id="grid-core"></div>
     </div>
-    <div class="grid" id="grid-core"></div>
-  </div>
 
-  <div class="section">
-    <div class="section-header">
-      <span class="section-title">Control Rods</span>
-      <div class="section-line"></div>
+    <div class="section">
+      <div class="section-header">
+        <span class="section-title">Control Rods</span>
+        <div class="section-line"></div>
+      </div>
+      <div class="grid" id="grid-rods"></div>
     </div>
-    <div class="grid" id="grid-rods"></div>
-  </div>
 
-  <div class="section">
-    <div class="section-header">
-      <span class="section-title">Coolant</span>
-      <div class="section-line"></div>
+    <div class="section">
+      <div class="section-header">
+        <span class="section-title">Coolant</span>
+        <div class="section-line"></div>
+      </div>
+      <div class="grid" id="grid-coolant"></div>
     </div>
-    <div class="grid" id="grid-coolant"></div>
-  </div>
 
-  <div class="section">
-    <div class="section-header">
-      <span class="section-title">Generators</span>
-      <div class="section-line"></div>
+    <div class="section">
+      <div class="section-header">
+        <span class="section-title">Generators</span>
+        <div class="section-line"></div>
+      </div>
+      <div class="grid" id="grid-generators"></div>
     </div>
-    <div class="grid" id="grid-generators"></div>
-  </div>
 
-  <div class="section">
-    <div class="section-header">
-      <span class="section-title">Steam Turbines</span>
-      <div class="section-line"></div>
+    <div class="section">
+      <div class="section-header">
+        <span class="section-title">Steam Turbines</span>
+        <div class="section-line"></div>
+      </div>
+      <div class="grid" id="grid-turbines"></div>
     </div>
-    <div class="grid" id="grid-turbines"></div>
-  </div>
 
-  <div class="section">
-    <div class="section-header">
-      <span class="section-title">Circulation Pumps</span>
-      <div class="section-line"></div>
+    <div class="section">
+      <div class="section-header">
+        <span class="section-title">Circulation Pumps</span>
+        <div class="section-line"></div>
+      </div>
+      <div class="grid" id="grid-pumps"></div>
     </div>
-    <div class="grid" id="grid-pumps"></div>
-  </div>
-</main>
-
-</main>
-</div><!-- /tab-monitor -->
+  </main>
+</div>
 
 <footer>NUCLEARES BRIDGE &mdash; REACTOR MONITOR &mdash; REFRESHES EVERY 3s</footer>
 
@@ -409,7 +408,7 @@ const VARS = {
   CORE_TEMP_MAX:                    { label: "Core Temp Max",       unit: "°C",  section: "core" },
   CORE_PRESSURE:                    { label: "Core Pressure",       unit: "bar", section: "core",       warn: 160, alert: 200 },
   CORE_INTEGRITY:                   { label: "Core Integrity",      unit: "%",   section: "core" },
-  CORE_WEAR:                        { label: "Core Wear",           unit: "%",   section: "core",       warn: 50, alert: 80 },
+  CORE_WEAR:                        { label: "Core Wear",           unit: "%",   section: "core",       warn: 50,  alert: 80  },
   CORE_STATE:                       { label: "Core State",          unit: "",    section: "core" },
   CORE_STATE_CRITICALITY:           { label: "Criticality",         unit: "",    section: "core" },
   CORE_IMMINENT_FUSION:             { label: "Imminent Fusion",     unit: "",    section: "core" },
@@ -503,18 +502,16 @@ function hasAlerts(sensors) {
 }
 
 // ---------------------------------------------------------------------------
-// Render
+// Render monitor cards
 // ---------------------------------------------------------------------------
 function render(data) {
-  const sensors      = data.sensors || {};
-  const gameOnline   = data.game_connected;
+  const sensors    = data.sensors || {};
+  const gameOnline = data.game_connected;
 
-  // Clear grids
   Object.values(SECTION_GRID).forEach(id => {
     document.getElementById(id).innerHTML = "";
   });
 
-  // Alert banner
   const banner = document.getElementById("alert-banner");
   if (gameOnline && hasAlerts(sensors)) {
     banner.style.display = "block";
@@ -523,14 +520,13 @@ function render(data) {
     banner.style.display = "none";
   }
 
-  // Cards
   for (const [varName, meta] of Object.entries(VARS)) {
     const grid = document.getElementById(SECTION_GRID[meta.section]);
     if (!grid) continue;
 
     const sensorData = sensors[varName];
-    const value      = sensorData ? sensorData.value      : null;
-    const valueStr   = sensorData ? sensorData.value_str  : null;
+    const value      = sensorData ? sensorData.value     : null;
+    const valueStr   = sensorData ? sensorData.value_str : null;
     const sev        = gameOnline ? severity(value, meta) : "";
 
     const card = document.createElement("div");
@@ -547,7 +543,7 @@ function render(data) {
 
     card.innerHTML = `
       <div class="card-label">${meta.label}</div>
-      <div class="card-value ${sev} ${!gameOnline ? 'offline' : ''}">${valueHTML}</div>
+      <div class="card-value ${sev} ${!gameOnline ? "offline" : ""}">${valueHTML}</div>
     `;
 
     grid.appendChild(card);
@@ -555,7 +551,7 @@ function render(data) {
 }
 
 // ---------------------------------------------------------------------------
-// Poll loop
+// Monitor poll loop
 // ---------------------------------------------------------------------------
 async function refresh() {
   const bridgeDot   = document.getElementById("bridge-dot");
@@ -569,14 +565,14 @@ async function refresh() {
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     const data = await resp.json();
 
-    bridgeDot.className   = "dot green";
+    bridgeDot.className     = "dot green";
     bridgeLabel.textContent = "Bridge OK";
 
     if (data.game_connected) {
-      gameDot.className   = "dot green";
+      gameDot.className    = "dot green";
       gameLabel.textContent = "Game Online";
     } else {
-      gameDot.className   = "dot red";
+      gameDot.className    = "dot red";
       gameLabel.textContent = "Game Offline";
     }
 
@@ -584,18 +580,17 @@ async function refresh() {
     render(data);
 
   } catch (e) {
-    bridgeDot.className    = "dot red";
-    bridgeLabel.textContent  = "Bridge Offline";
-    gameDot.className      = "dot grey";
-    gameLabel.textContent    = "Unknown";
-    updated.textContent    = "Connection lost";
+    bridgeDot.className     = "dot red";
+    bridgeLabel.textContent = "Bridge Offline";
+    gameDot.className       = "dot grey";
+    gameLabel.textContent   = "Unknown";
+    updated.textContent     = "Connection lost";
   }
 }
 
 // ---------------------------------------------------------------------------
 // Tab switching
 // ---------------------------------------------------------------------------
-let _activeTab = "monitor";
 let _logsInterval = null;
 
 function switchTab(name, btn) {
@@ -603,7 +598,6 @@ function switchTab(name, btn) {
   document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
   document.getElementById("tab-" + name).classList.add("active");
   btn.classList.add("active");
-  _activeTab = name;
 
   if (name === "logs") {
     refreshLogs();
@@ -616,11 +610,9 @@ function switchTab(name, btn) {
 // ---------------------------------------------------------------------------
 // Logs
 // ---------------------------------------------------------------------------
-const LEVEL_ORDER = ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"];
-
 async function refreshLogs() {
-  const level = document.getElementById("log-level-filter").value;
-  const limit = document.getElementById("log-limit").value;
+  const level  = document.getElementById("log-level-filter").value;
+  const limit  = document.getElementById("log-limit").value;
   const params = new URLSearchParams({ limit });
   if (level) params.set("level", level);
 
@@ -635,7 +627,6 @@ async function refreshLogs() {
     const list = document.getElementById("log-list");
     list.innerHTML = "";
 
-    // Newest first
     const entries = [...data.entries].reverse();
     for (const entry of entries) {
       const li = document.createElement("li");
@@ -652,11 +643,11 @@ async function refreshLogs() {
 }
 
 function escapeHtml(str) {
-  return str.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+  return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
 // ---------------------------------------------------------------------------
-// Start monitor tab polling
+// Start
 // ---------------------------------------------------------------------------
 refresh();
 setInterval(refresh, 3000);
