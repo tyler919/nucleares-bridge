@@ -301,18 +301,29 @@ def control():
         request.remote_addr, variable, value,
     )
 
+    # The Nucleares webserver accepts writes as a POST whose Variable and Value
+    # ride in the query string (a form-body POST is rejected). A valid write
+    # returns HTTP 200; an unknown writable name returns 404 with a message like
+    # "The writable variable 'X' does not exist."
+    from urllib.parse import urlsplit, quote
+    parts = urlsplit(NUCLEARES_URL)
+    root  = f"{parts.scheme}://{parts.netloc}"
+    url   = f"{root}/?Variable={quote(variable)}&Value={quote(str(value))}"
+
     try:
-        r = requests.post(
-            NUCLEARES_URL,
-            data={"Variable": variable, "Value": value},
-            timeout=3,
-        )
-        r.raise_for_status()
-        log.info("Control command accepted by game: %s = %s", variable, value)
-        return jsonify({"success": True, "variable": variable, "value": value})
+        r = requests.post(url, timeout=3)
+        game_text = r.text.strip()
+        if r.status_code == 200:
+            log.info("Control command accepted by game: %s = %s", variable, value)
+            return jsonify({"success": True, "variable": variable,
+                            "value": value, "game_response": game_text})
+        log.warning("Game rejected %s = %s (HTTP %d): %s",
+                    variable, value, r.status_code, game_text)
+        return jsonify({"success": False, "variable": variable, "value": value,
+                        "status": r.status_code, "game_response": game_text}), 502
 
     except requests.RequestException as exc:
-        log.error("Control command failed — game rejected it: %s", exc)
+        log.error("Control command failed — could not reach game: %s", exc)
         return jsonify({"success": False, "error": str(exc)}), 502
 
 
@@ -365,6 +376,95 @@ def rawtest():
     except Exception as exc:
         return jsonify({"sent": {"method": method, "url": url, "body": body},
                         "error": str(exc)}), 200
+
+
+# GET /gamefiles  — TEMPORARY: locate the Nucleares install and return its
+# XMLScript definition files, which enumerate the writable variables for this
+# game version. Protected by the API key. Remove once mapping is done.
+@app.route("/gamefiles")
+def gamefiles():
+    _check_auth()
+    import re as _re
+
+    steam_roots = []
+    try:
+        import winreg
+        for hive, key, valname in [
+            (winreg.HKEY_CURRENT_USER, r"Software\Valve\Steam", "SteamPath"),
+            (winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\WOW6432Node\Valve\Steam", "InstallPath"),
+        ]:
+            try:
+                k = winreg.OpenKey(hive, key)
+                val, _ = winreg.QueryValueEx(k, valname)
+                if val:
+                    steam_roots.append(val)
+            except OSError:
+                pass
+    except Exception:
+        pass
+
+    import string
+    for d in string.ascii_uppercase:
+        for p in (f"{d}:\\Program Files (x86)\\Steam", f"{d}:\\Steam", f"{d}:\\SteamLibrary"):
+            if os.path.isdir(p):
+                steam_roots.append(p)
+
+    libs = set()
+    for sr in steam_roots:
+        libs.add(sr)
+        vdf = os.path.join(sr, "steamapps", "libraryfolders.vdf")
+        if os.path.isfile(vdf):
+            try:
+                txt = open(vdf, encoding="utf-8", errors="replace").read()
+                for m in _re.finditer(r'"path"\s*"([^"]+)"', txt):
+                    libs.add(m.group(1).replace("\\\\", "\\"))
+            except Exception:
+                pass
+
+    game_dir = xmldir = None
+    for lib in libs:
+        common = os.path.join(lib, "steamapps", "common")
+        if not os.path.isdir(common):
+            continue
+        try:
+            for gf in os.listdir(common):
+                if "nuclear" in gf.lower():
+                    gd = os.path.join(common, gf)
+                    cand = os.path.join(gd, "Assets", "XMLScript")
+                    game_dir = gd
+                    if os.path.isdir(cand):
+                        xmldir = cand
+                        break
+        except Exception:
+            pass
+        if xmldir:
+            break
+
+    if not xmldir:
+        return jsonify({"found": False, "searched_libraries": sorted(libs),
+                        "game_dir": game_dir})
+
+    want = request.args.get("file")
+    listing = sorted(os.listdir(xmldir))
+    if want:
+        fp = os.path.join(xmldir, os.path.basename(want))
+        if not os.path.isfile(fp):
+            abort(404, description=f"{want} not found in XMLScript.")
+        return jsonify({"file": want,
+                        "content": open(fp, encoding="utf-8", errors="replace").read()[:600000]})
+
+    out = {"found": True, "xmldir": xmldir, "files": listing}
+    # auto-include any patch-note text file (documents settable vars)
+    for fn in listing:
+        if "patch" in fn.lower() and fn.lower().endswith(".txt"):
+            try:
+                out["patch_note_name"] = fn
+                out["patch_note"] = open(os.path.join(xmldir, fn),
+                                         encoding="utf-8", errors="replace").read()[:600000]
+            except Exception as e:
+                out["patch_note"] = f"<read error: {e}>"
+            break
+    return jsonify(out)
 
 
 # ---------------------------------------------------------------------------
