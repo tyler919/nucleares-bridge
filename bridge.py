@@ -371,7 +371,7 @@ def rawtest():
         return jsonify({
             "sent":   {"method": method, "url": url, "body": body, "headers": headers},
             "status": r.status_code,
-            "text":   r.text[:2000],
+            "text":   r.text[:500000],
         })
     except Exception as exc:
         return jsonify({"sent": {"method": method, "url": url, "body": body},
