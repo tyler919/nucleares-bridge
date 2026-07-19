@@ -334,6 +334,39 @@ def logs():
     })
 
 
+# POST /rawtest  — TEMPORARY: send an arbitrary HTTP request to the game so the
+# correct write format can be discovered. Protected by the API key. Remove once
+# /control is fixed.
+@app.route("/rawtest", methods=["POST"])
+def rawtest():
+    _check_auth()
+    from urllib.parse import urlsplit
+    b = request.get_json(silent=True) or {}
+    method  = (b.get("method") or "GET").upper()
+    path    = b.get("path", "/")
+    body    = b.get("body")               # raw string or None
+    headers = b.get("headers") or {}
+
+    parts = urlsplit(NUCLEARES_URL)
+    root  = f"{parts.scheme}://{parts.netloc}"
+    url   = root + path
+
+    kwargs = {"timeout": 4, "headers": headers}
+    if body is not None:
+        kwargs["data"] = body.encode() if isinstance(body, str) else body
+
+    try:
+        r = requests.request(method, url, **kwargs)
+        return jsonify({
+            "sent":   {"method": method, "url": url, "body": body, "headers": headers},
+            "status": r.status_code,
+            "text":   r.text[:2000],
+        })
+    except Exception as exc:
+        return jsonify({"sent": {"method": method, "url": url, "body": body},
+                        "error": str(exc)}), 200
+
+
 # ---------------------------------------------------------------------------
 # UI routes — no API key required, accessible from any browser on the LAN
 # ---------------------------------------------------------------------------
