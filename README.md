@@ -45,7 +45,7 @@ Edit `.env`:
 
 | Variable | Description |
 |---|---|
-| `HA_API_KEY` | A long random secret. Generate with: `python -c "import secrets; print(secrets.token_hex(32))"` |
+| `HA_API_KEY` | **Required.** A long random secret. Generate with: `python -c "import secrets; print(secrets.token_hex(32))"`. The bridge refuses to start without it. |
 | `ALLOWED_IP` | IP of your HA server. Leave blank to allow any LAN IP. |
 | `BRIDGE_PORT` | Port the bridge listens on (default: `8765`) |
 | `POLL_INTERVAL` | Seconds between Nucleares polls (default: `5`) |
@@ -109,7 +109,9 @@ nssm remove NuclearesBridge confirm
 
 ## API Reference
 
-All endpoints require the header: `X-API-Key: <your key>`
+All endpoints below require the header: `X-API-Key: <your key>`, and (if `ALLOWED_IP` is set) must come from that IP.
+
+The browser UI at `/ui` and its `/ui/data` feed need no key — they show telemetry only. The UI's **Logs** tab (`/ui/logs`) asks for the API key, because the logs carry client IPs and every control command.
 
 ### `GET /health`
 
@@ -194,6 +196,8 @@ Run as Administrator if NSSM needs to restart the service.
 ## Security notes
 
 - The bridge only listens on your LAN — do not port-forward it to the internet
+- `HA_API_KEY` is required; the bridge exits at startup if it is missing or blank, so it can never run with `/control` open
+- The key crosses the LAN over plain HTTP, so anyone who can sniff your LAN can read it. Treat it as a LAN-trust control that keeps other devices from driving the reactor by accident, not as a real secret
 - Set `ALLOWED_IP` to your HA server's IP for the strongest protection
 - Keep `.env` out of version control (it is in `.gitignore`)
 - The bridge holds no HA credentials

@@ -336,6 +336,9 @@
     </select>
     <button onclick="refreshLogs()">Refresh</button>
     <div class="spacer"></div>
+    <label for="log-api-key">API KEY</label>
+    <input id="log-api-key" type="password" autocomplete="off" size="16"
+           onchange="sessionStorage.setItem('bridgeApiKey', this.value); refreshLogs()">
     <span class="log-stats" id="log-stats"></span>
   </div>
   <ul id="log-list"></ul>
@@ -616,8 +619,23 @@ async function refreshLogs() {
   const params = new URLSearchParams({ limit });
   if (level) params.set("level", level);
 
+  // Logs carry client IPs and control commands, so the bridge wants the API key.
+  const keyInput = document.getElementById("log-api-key");
+  if (!keyInput.value) keyInput.value = sessionStorage.getItem("bridgeApiKey") || "";
+  if (!keyInput.value) {
+    document.getElementById("log-stats").textContent = "Enter the API key to view logs";
+    return;
+  }
+
   try {
-    const resp = await fetch("/ui/logs?" + params.toString());
+    const resp = await fetch("/ui/logs?" + params.toString(),
+                             { headers: { "X-API-Key": keyInput.value } });
+    if (resp.status === 401) {
+      keyInput.value = "";
+      sessionStorage.removeItem("bridgeApiKey");
+      document.getElementById("log-stats").textContent = "Wrong API key";
+      return;
+    }
     if (!resp.ok) throw new Error("HTTP " + resp.status);
     const data = await resp.json();
 

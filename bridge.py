@@ -5,7 +5,9 @@ over a local REST API so Home Assistant can pull from it.
 """
 
 import collections
+import hmac
 import os
+import sys
 import time
 import threading
 import logging
@@ -22,13 +24,17 @@ load_dotenv()
 # ---------------------------------------------------------------------------
 # Config
 # ---------------------------------------------------------------------------
-API_KEY        = os.getenv("HA_API_KEY", "")
+API_KEY        = os.getenv("HA_API_KEY", "").strip()
 ALLOWED_IP     = os.getenv("ALLOWED_IP", "")
 BRIDGE_PORT    = int(os.getenv("BRIDGE_PORT", 8765))
 POLL_INTERVAL  = int(os.getenv("POLL_INTERVAL", 5))
 NUCLEARES_URL  = os.getenv("NUCLEARES_URL", "http://localhost:8080/")
 LOG_FILE       = os.getenv("LOG_FILE", "bridge.log")
 LOG_LEVEL      = os.getenv("LOG_LEVEL", "INFO").upper()
+
+# Fail closed: a missing or blank key must never leave /control open.
+if not API_KEY:
+    sys.exit("HA_API_KEY must be set")
 
 # ---------------------------------------------------------------------------
 # Logging — console + rotating file + in-memory ring buffer for /logs
@@ -209,16 +215,20 @@ def _poll_loop() -> None:
 _LOOPBACK = {"127.0.0.1", "::1"}
 
 
+def _check_key() -> None:
+    """Abort request unless it carries the right X-API-Key header."""
+    provided = request.headers.get("X-API-Key", "")
+    if not hmac.compare_digest(provided.encode(), API_KEY.encode()):
+        log.warning(
+            "Rejected %s %s from %s — bad API key",
+            request.method, request.path, request.remote_addr,
+        )
+        abort(401, description="Invalid API key.")
+
+
 def _check_auth() -> None:
     """Abort request if API key or source IP is wrong."""
-    if API_KEY:
-        provided = request.headers.get("X-API-Key", "")
-        if provided != API_KEY:
-            log.warning(
-                "Rejected %s %s from %s — bad API key",
-                request.method, request.path, request.remote_addr,
-            )
-            abort(401, description="Invalid API key.")
+    _check_key()
 
     if ALLOWED_IP:
         allowed = {ALLOWED_IP} | _LOOPBACK
@@ -301,18 +311,29 @@ def control():
         request.remote_addr, variable, value,
     )
 
+    # The Nucleares webserver accepts writes as a POST whose Variable and Value
+    # ride in the query string (a form-body POST is rejected). A valid write
+    # returns HTTP 200; an unknown writable name returns 404 with a message like
+    # "The writable variable 'X' does not exist."
+    from urllib.parse import urlsplit, quote
+    parts = urlsplit(NUCLEARES_URL)
+    root  = f"{parts.scheme}://{parts.netloc}"
+    url   = f"{root}/?Variable={quote(variable)}&Value={quote(str(value))}"
+
     try:
-        r = requests.post(
-            NUCLEARES_URL,
-            data={"Variable": variable, "Value": value},
-            timeout=3,
-        )
-        r.raise_for_status()
-        log.info("Control command accepted by game: %s = %s", variable, value)
-        return jsonify({"success": True, "variable": variable, "value": value})
+        r = requests.post(url, timeout=3)
+        game_text = r.text.strip()
+        if r.status_code == 200:
+            log.info("Control command accepted by game: %s = %s", variable, value)
+            return jsonify({"success": True, "variable": variable,
+                            "value": value, "game_response": game_text})
+        log.warning("Game rejected %s = %s (HTTP %d): %s",
+                    variable, value, r.status_code, game_text)
+        return jsonify({"success": False, "variable": variable, "value": value,
+                        "status": r.status_code, "game_response": game_text}), 502
 
     except requests.RequestException as exc:
-        log.error("Control command failed — game rejected it: %s", exc)
+        log.error("Control command failed — could not reach game: %s", exc)
         return jsonify({"success": False, "error": str(exc)}), 502
 
 
@@ -335,7 +356,9 @@ def logs():
 
 
 # ---------------------------------------------------------------------------
-# UI routes — no API key required, accessible from any browser on the LAN
+# UI routes — /ui and /ui/data need no API key and are open to any browser on
+# the LAN. /ui/logs carries client IPs and every control command, so it needs
+# the key (but not ALLOWED_IP, so the browser UI still works from any machine).
 # ---------------------------------------------------------------------------
 
 @app.route("/ui")
@@ -359,6 +382,7 @@ def ui_data():
 
 @app.route("/ui/logs")
 def ui_logs():
+    _check_key()
     level  = request.args.get("level", "").upper()
     limit  = min(int(request.args.get("limit", 200)), 500)
     entries = list(_LOG_BUFFER)
