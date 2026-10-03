@@ -5,7 +5,9 @@ over a local REST API so Home Assistant can pull from it.
 """
 
 import collections
+import hmac
 import os
+import sys
 import time
 import threading
 import logging
@@ -22,13 +24,17 @@ load_dotenv()
 # ---------------------------------------------------------------------------
 # Config
 # ---------------------------------------------------------------------------
-API_KEY        = os.getenv("HA_API_KEY", "")
+API_KEY        = os.getenv("HA_API_KEY", "").strip()
 ALLOWED_IP     = os.getenv("ALLOWED_IP", "")
 BRIDGE_PORT    = int(os.getenv("BRIDGE_PORT", 8765))
 POLL_INTERVAL  = int(os.getenv("POLL_INTERVAL", 5))
 NUCLEARES_URL  = os.getenv("NUCLEARES_URL", "http://localhost:8080/")
 LOG_FILE       = os.getenv("LOG_FILE", "bridge.log")
 LOG_LEVEL      = os.getenv("LOG_LEVEL", "INFO").upper()
+
+# Fail closed: a missing or blank key must never leave /control open.
+if not API_KEY:
+    sys.exit("HA_API_KEY must be set")
 
 # ---------------------------------------------------------------------------
 # Logging — console + rotating file + in-memory ring buffer for /logs
@@ -209,16 +215,20 @@ def _poll_loop() -> None:
 _LOOPBACK = {"127.0.0.1", "::1"}
 
 
+def _check_key() -> None:
+    """Abort request unless it carries the right X-API-Key header."""
+    provided = request.headers.get("X-API-Key", "")
+    if not hmac.compare_digest(provided.encode(), API_KEY.encode()):
+        log.warning(
+            "Rejected %s %s from %s — bad API key",
+            request.method, request.path, request.remote_addr,
+        )
+        abort(401, description="Invalid API key.")
+
+
 def _check_auth() -> None:
     """Abort request if API key or source IP is wrong."""
-    if API_KEY:
-        provided = request.headers.get("X-API-Key", "")
-        if provided != API_KEY:
-            log.warning(
-                "Rejected %s %s from %s — bad API key",
-                request.method, request.path, request.remote_addr,
-            )
-            abort(401, description="Invalid API key.")
+    _check_key()
 
     if ALLOWED_IP:
         allowed = {ALLOWED_IP} | _LOOPBACK
@@ -345,130 +355,10 @@ def logs():
     })
 
 
-# POST /rawtest  — TEMPORARY: send an arbitrary HTTP request to the game so the
-# correct write format can be discovered. Protected by the API key. Remove once
-# /control is fixed.
-@app.route("/rawtest", methods=["POST"])
-def rawtest():
-    _check_auth()
-    from urllib.parse import urlsplit
-    b = request.get_json(silent=True) or {}
-    method  = (b.get("method") or "GET").upper()
-    path    = b.get("path", "/")
-    body    = b.get("body")               # raw string or None
-    headers = b.get("headers") or {}
-
-    parts = urlsplit(NUCLEARES_URL)
-    root  = f"{parts.scheme}://{parts.netloc}"
-    url   = root + path
-
-    kwargs = {"timeout": 4, "headers": headers}
-    if body is not None:
-        kwargs["data"] = body.encode() if isinstance(body, str) else body
-
-    try:
-        r = requests.request(method, url, **kwargs)
-        return jsonify({
-            "sent":   {"method": method, "url": url, "body": body, "headers": headers},
-            "status": r.status_code,
-            "text":   r.text[:500000],
-        })
-    except Exception as exc:
-        return jsonify({"sent": {"method": method, "url": url, "body": body},
-                        "error": str(exc)}), 200
-
-
-# GET /gamefiles  — TEMPORARY: locate the Nucleares install and return its
-# XMLScript definition files, which enumerate the writable variables for this
-# game version. Protected by the API key. Remove once mapping is done.
-@app.route("/gamefiles")
-def gamefiles():
-    _check_auth()
-    import re as _re
-
-    steam_roots = []
-    try:
-        import winreg
-        for hive, key, valname in [
-            (winreg.HKEY_CURRENT_USER, r"Software\Valve\Steam", "SteamPath"),
-            (winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\WOW6432Node\Valve\Steam", "InstallPath"),
-        ]:
-            try:
-                k = winreg.OpenKey(hive, key)
-                val, _ = winreg.QueryValueEx(k, valname)
-                if val:
-                    steam_roots.append(val)
-            except OSError:
-                pass
-    except Exception:
-        pass
-
-    import string
-    for d in string.ascii_uppercase:
-        for p in (f"{d}:\\Program Files (x86)\\Steam", f"{d}:\\Steam", f"{d}:\\SteamLibrary"):
-            if os.path.isdir(p):
-                steam_roots.append(p)
-
-    libs = set()
-    for sr in steam_roots:
-        libs.add(sr)
-        vdf = os.path.join(sr, "steamapps", "libraryfolders.vdf")
-        if os.path.isfile(vdf):
-            try:
-                txt = open(vdf, encoding="utf-8", errors="replace").read()
-                for m in _re.finditer(r'"path"\s*"([^"]+)"', txt):
-                    libs.add(m.group(1).replace("\\\\", "\\"))
-            except Exception:
-                pass
-
-    game_dir = xmldir = None
-    for lib in libs:
-        common = os.path.join(lib, "steamapps", "common")
-        if not os.path.isdir(common):
-            continue
-        try:
-            for gf in os.listdir(common):
-                if "nuclear" in gf.lower():
-                    gd = os.path.join(common, gf)
-                    cand = os.path.join(gd, "Assets", "XMLScript")
-                    game_dir = gd
-                    if os.path.isdir(cand):
-                        xmldir = cand
-                        break
-        except Exception:
-            pass
-        if xmldir:
-            break
-
-    if not xmldir:
-        return jsonify({"found": False, "searched_libraries": sorted(libs),
-                        "game_dir": game_dir})
-
-    want = request.args.get("file")
-    listing = sorted(os.listdir(xmldir))
-    if want:
-        fp = os.path.join(xmldir, os.path.basename(want))
-        if not os.path.isfile(fp):
-            abort(404, description=f"{want} not found in XMLScript.")
-        return jsonify({"file": want,
-                        "content": open(fp, encoding="utf-8", errors="replace").read()[:600000]})
-
-    out = {"found": True, "xmldir": xmldir, "files": listing}
-    # auto-include any patch-note text file (documents settable vars)
-    for fn in listing:
-        if "patch" in fn.lower() and fn.lower().endswith(".txt"):
-            try:
-                out["patch_note_name"] = fn
-                out["patch_note"] = open(os.path.join(xmldir, fn),
-                                         encoding="utf-8", errors="replace").read()[:600000]
-            except Exception as e:
-                out["patch_note"] = f"<read error: {e}>"
-            break
-    return jsonify(out)
-
-
 # ---------------------------------------------------------------------------
-# UI routes — no API key required, accessible from any browser on the LAN
+# UI routes — /ui and /ui/data need no API key and are open to any browser on
+# the LAN. /ui/logs carries client IPs and every control command, so it needs
+# the key (but not ALLOWED_IP, so the browser UI still works from any machine).
 # ---------------------------------------------------------------------------
 
 @app.route("/ui")
@@ -492,6 +382,7 @@ def ui_data():
 
 @app.route("/ui/logs")
 def ui_logs():
+    _check_key()
     level  = request.args.get("level", "").upper()
     limit  = min(int(request.args.get("limit", 200)), 500)
     entries = list(_LOG_BUFFER)
